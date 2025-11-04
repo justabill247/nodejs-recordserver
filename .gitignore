@@ -1,0 +1,46 @@
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# SQLite database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Audio recordings
+recordings/
+temp_recordings/
+*.mp3
+*.wav
+*.m4a
+*.aac
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+
+# Build / output
+dist/
+build/
+coverage/
+
+# Lock files (optional — comment out if you prefer to commit them)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
