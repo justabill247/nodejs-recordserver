@@ -5,8 +5,12 @@ import express from "express"
 import path from "path"
 import fs from "fs"
 
+import { setupSwagger } from "./swagger.js"
+
 import recordingsRouter from "./api/recordings.js";
 import scheduleRouter from "./api/schedule.js";
+import streamRouter from "./api/streams.js";
+
 import { scheduleRecordings } from "./scheduler.js";
 
 // --- setup express --- 
@@ -19,6 +23,9 @@ app.use(express.json());
 
 app.use("/api/recordings", recordingsRouter);
 app.use("/api/schedule", scheduleRouter);
+app.use("/api/streams", streamRouter);
+
+setupSwagger(app);
 
 // --- Serve Recorded Files ---
 if (!fs.existsSync(RECORDINGS_DIR)) {
@@ -33,19 +40,13 @@ scheduleRecordings();
 app.get("/", (req, res) => {
   res.send(`
     <h1>🎙️ Recording Server</h1>
-    <p>Available endpoints:</p>
-    <ul>
-      <li><code>GET /api/recordings</code> — list all recorded files</li>
-      <li><code>GET /api/schedule</code> — list all scheduled jobs</li>
-      <li><code>POST /api/schedule</code> — schedule a new recording</li>
-      <li><code>DELETE /api/schedule/:name</code> — cancel a schedule</li>
-      <li><code>/audio/&lt;filename&gt;</code> — access recorded files</li>
-    </ul>
   `);
 });
 
 // --- Start Server ---
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+const port = process.env.PORT || 4000;
+app.listen(port, () => {
+  console.log(`🚀 Server running on http://localhost:${port}`);
+  console.log(`📘 API Explorer available at http://localhost:${port}/api-docs`);
   console.log(`📂 Serving recordings from: ${RECORDINGS_DIR}`);
 });

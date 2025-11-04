@@ -1,36 +1,129 @@
-import { Router } from "express";
-import { scheduleJob, listJobs, cancelJob } from "../scheduler.js";
-import { getAllSchedules } from "../db.js";
+import express from "express";
+import { scheduleJob, cancelJob, listJobs } from "../scheduler.js";
+import {
+  addSchedule,
+  deleteSchedule,
+  getAllSchedulesWithStreamInfo,
+  getStream
+} from "../db.js";
 
-const router = Router();
+const router = express.Router();
 
-// POST /api/schedule → create a new scheduled recording
+/**
+ * @openapi
+ * /api/schedule:
+ *   get:
+ *     summary: Get all schedules
+ *     responses:
+ *       200:
+ *         description: A list of all scheduled recordings.
+ */
+router.get("/", (req, res) => {
+  const schedules = getAllSchedulesWithStreamInfo();
+  res.json({
+    activeJobs: listJobs(),
+    schedules
+  });
+});
+
+/**
+ * @openapi
+ * /api/schedule:
+ *   post:
+ *     summary: Create a new scheduled recording
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               cron:
+ *                 type: string
+ *               duration:
+ *                 type: integer
+ *               streamId:
+ *                 type: integer
+ *               url:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully created schedule.
+ */
 router.post("/", (req, res) => {
-  const { url, name, cron, duration } = req.body;
+  const { name, cron, duration, streamId, url } = req.body;
 
-  if (!url || !name || !cron || !duration) {
-    return res.status(400).json({ error: "Missing required fields" });
+  if (!name || !cron || !duration) {
+    return res.status(400).json({ error: "Missing required fields: name, cron, duration" });
+  }
+
+  // Determine final stream details
+  let finalUrl = url;
+  let finalStreamId = streamId || null;
+
+  if (!finalUrl && finalStreamId) {
+    const stream = getStream(finalStreamId);
+    if (!stream) {
+      return res.status(404).json({ error: "Stream not found" });
+    }
+    finalUrl = stream.url;
+  }
+
+  if (!finalUrl) {
+    return res.status(400).json({ error: "Must include a stream URL or streamId" });
   }
 
   try {
-    scheduleJob(name, cron, { url, duration, name });
-    res.json({ message: `Scheduled '${name}'`, cron });
+    // Schedule the recording job
+    scheduleJob(name, cron, { url: finalUrl, duration, name });
+
+    // Save it to the database
+    addSchedule({
+      name,
+      stream_id: finalStreamId,
+      source_url: finalUrl,
+      cron,
+      duration
+    });
+
+    res.json({ success: true, message: `Scheduled '${name}' for ${cron}` });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error scheduling job:", err);
+    res.status(500).json({ error: "Failed to schedule job" });
   }
 });
 
-// GET /api/schedule → list all schedules from DB
-router.get("/", (req, res) => {
-  res.json({ jobs: getAllSchedules() });
-});
-
-// DELETE /api/schedule/:name → cancel and remove a job
+/**
+ * @openapi
+ * /api/schedule:
+ *   delete:
+ *     summary: Delete a schedule
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully deleted schedule.
+ */
 router.delete("/:name", (req, res) => {
   const { name } = req.params;
-  const success = cancelJob(name);
-  if (success) res.json({ message: `Cancelled '${name}'` });
-  else res.status(404).json({ error: "Job not found" });
+
+  try {
+    cancelJob(name);
+    deleteSchedule(name);
+    res.json({ success: true, message: `Deleted schedule '${name}'` });
+  } catch (err) {
+    console.error("Error deleting schedule:", err);
+    res.status(500).json({ error: "Failed to delete schedule" });
+  }
 });
 
 export default router;
