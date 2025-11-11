@@ -1,71 +1,82 @@
 import express from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import dotenv from "dotenv"
 import { getAllStreams, addStream, deleteStream } from "../db.js";
+
+dotenv.config()
 
 const router = express.Router();
 
+const LOGOS_DIR = process.env.LOGOS_DIR || path.join(process.cwd(), logos)
+
+if(!fs.existsSync(LOGOS_DIR)) {
+  fs.mkdirSync(LOGOS_DIR, {recursive: true})
+}
+
+// --- Multer setup ---
+const storage = multer.diskStorage({
+  destination: (_, __, cb) => cb(null, LOGOS_DIR),
+  filename: (_, file, cb) => {
+    //randomized unique file name
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+    cb(null, unique);
+  },
+});
+
+const upload = multer({ storage });
+
+// --- API Routes ---
+
 /**
- * @openapi
- * /api/streams:
- *   get:
- *     summary: Get all streams
- *     responses:
- *       200:
- *         description: A list of all streams with info.
+ * Create a new stream
+ * Supports: multipart/form-data with optional logo file
+ */
+router.post("/", upload.single("logo"), (req, res) => {
+  try {
+    const { name, url } = req.body;
+    const logo_url = req.file ? `/logos/${req.file.filename}` : null;
+
+    if (!name || !url) {
+      return res.status(400).json({ error: "Both 'name' and 'url' are required." });
+    }
+
+    addStream({ name, url, logo_url });
+    console.log(`✅ Stream added: ${name} (${url})`);
+    res.json({ success: true, message: `Stream '${name}' added successfully.` });
+  } catch (err) {
+    console.error("❌ Error adding stream:", err);
+    res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+/**
+ * Get all streams
  */
 router.get("/", (req, res) => {
-  const streams = getAllStreams();
-  res.json(streams);
-});
-
-/**
- * @openapi
- * /api/streams:
- *   post:
- *     summary: Create a new stream
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               url:
- *                 type: string
- *     responses:
- *       200:
- *         description: Successfully created stream.
- */
-router.post("/", (req, res) => {
-  const { name, url } = req.body;
-  if (!name || !url) {
-    return res.status(400).json({ error: "name and url are required" });
+  try {
+    const streams = getAllStreams();
+    res.json(streams);
+  } catch (err) {
+    console.error("❌ Error fetching streams:", err);
+    res.status(500).json({ error: "Failed to load streams." });
   }
-
-  addStream({ name, url });
-  res.json({ success: true, message: `Stream '${name}' saved.` });
 });
 
 /**
- * @openapi
- * /api/streams/{streamId}:
- *   delete:
- *     description: Delete stream
- *     parameters:
- *       - in: path
- *         name: "streamId"
- *         schema:
- *             type: integer
- *             description: id of stream to delete
- *     responses:
- *       200:
- *         description: Successfully deleted stream.
+ * Delete a stream by ID
  */
 router.delete("/:id", (req, res) => {
-  const { id } = req.params;
-  deleteStream(id);
-  res.json({ success: true, message: `Stream '${id}' deleted.` });
+  try {
+    const { id } = req.params;
+    deleteStream(id);
+    console.log(`🗑️  Stream deleted: ${id}`);
+    res.json({ success: true, message: `Stream '${id}' deleted.` });
+  } catch (err) {
+    console.error("❌ Error deleting stream:", err);
+    res.status(500).json({ error: "Failed to delete stream." });
+  }
 });
 
 export default router;

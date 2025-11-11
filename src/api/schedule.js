@@ -1,7 +1,8 @@
 import express from "express";
-import { scheduleJob, cancelJob, listJobs } from "../scheduler.js";
+import { scheduleJob, cancelJob, cancelAllJobs, listJobs } from "../cronScheduler.js";
 import {
   addSchedule,
+  deleteAllSchedules,
   deleteSchedule,
   getAllSchedulesWithStreamInfo,
   getStream
@@ -76,19 +77,11 @@ router.post("/", (req, res) => {
   }
 
   try {
-    // Schedule the recording job
-    scheduleJob(name, cron, { url: finalUrl, duration, name });
+    // Schedule the recording job, save it to db
+    scheduleJob(name, cron, { url: finalUrl, id: finalStreamId, duration, name }, true);
 
-    // Save it to the database
-    addSchedule({
-      name,
-      stream_id: finalStreamId,
-      source_url: finalUrl,
-      cron,
-      duration
-    });
 
-    res.json({ success: true, message: `Scheduled '${name}' for ${cron}` });
+    res.json({ success: true, message: `Scheduled '${name}' for ${cron} for ${duration}` });
   } catch (err) {
     console.error("Error scheduling job:", err);
     res.status(500).json({ error: "Failed to schedule job" });
@@ -97,18 +90,15 @@ router.post("/", (req, res) => {
 
 /**
  * @openapi
- * /api/schedule:
+ * /api/schedule/{scheduleName}:
  *   delete:
- *     summary: Delete a schedule
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
+ *     description: Delete schedule
+ *     parameters:
+ *       - in: path
+ *         name: "scheduleName"
+ *         schema:
+ *             string: integer
+ *             description: name of schedule to delete
  *     responses:
  *       200:
  *         description: Successfully deleted schedule.
@@ -124,6 +114,23 @@ router.delete("/:name", (req, res) => {
     console.error("Error deleting schedule:", err);
     res.status(500).json({ error: "Failed to delete schedule" });
   }
+});
+
+/**
+ * @openapi
+ * /api/schedule/:
+ *   delete:
+ *     description: Delete all schedules
+ *     responses:
+ *       200:
+ *         description: Successfully deleted all schedules.
+ */
+router.post("/deleteAll", (req, res) => {
+
+    cancelAllJobs();
+    deleteAllSchedules();
+    res.json({ success: true, message: `Deleted all schedules` });
+
 });
 
 export default router;

@@ -8,11 +8,16 @@ const scheduledJobs = new Map();
 export function scheduleRecordings() {
   const schedules = getAllSchedules();
   for (const s of schedules) {
-    scheduleJob(s.name, s.cron, {
-      url: s.source_url,
-      duration: s.duration,
-      name: s.name,
-    }, false); // don't re-save to DB on reload
+    scheduleJob(
+      s.name,
+      s.cron,
+      {
+        url: s.source_url,
+        duration: s.duration,
+        name: s.name,
+      },
+      false
+    ); // don't re-save to DB on reload
   }
   console.log(`🔁 Loaded ${schedules.length} saved jobs from DB`);
 }
@@ -34,6 +39,7 @@ export function scheduleJob(name, cronExpr, options, saveToDb = true) {
     addSchedule({
       name,
       source_url: options.url,
+      stream_id: options.id,
       cron: cronExpr,
       duration: options.duration,
     });
@@ -54,4 +60,12 @@ export function cancelJob(name) {
     return true;
   }
   return false;
+}
+
+export function cancelAllJobs() {
+  for (const [id, job] of scheduledJobs.entries()) {
+    job.stop();
+    scheduledJobs.delete(id);
+  }
+  console.log("✅ All scheduled jobs cancelled.");
 }

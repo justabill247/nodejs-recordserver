@@ -26,6 +26,10 @@ temp_recordings/
 *.m4a
 *.aac
 
+# Upload folder
+uploads/*
+!uploads/.gitkeep
+
 # OS-specific
 .DS_Store
 Thumbs.db
