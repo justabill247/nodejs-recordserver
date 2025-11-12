@@ -19,7 +19,9 @@ db.exec(
   CREATE TABLE IF NOT EXISTS recordings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
-    url TEXT,
+    logo_path TEXT,
+    source_url TEXT,
+    stream_id INTEGER,
     file_path TEXT,
     start_time TEXT,
     end_time TEXT,
@@ -51,7 +53,8 @@ console.log("✅ Tables ready.");
  * Adds a recording to the database
  *
  * @param {string} name - The name of the recording
- * @param {url} url - The stream URL
+ * @param {url} source_url - The stream URL that was recorded
+ * @param {integer} stream_id The id of the stream that was recorded
  * @param {string}  file_path - The path on the server
  * @param {string}  start_time - The time the recording was started
  * @param {string}  end_time - The time the recording ended
@@ -59,7 +62,8 @@ console.log("✅ Tables ready.");
  */
 export function addRecording({
   name,
-  url,
+  source_url,
+  stream_id,
   file_path,
   start_time,
   end_time,
@@ -68,10 +72,10 @@ export function addRecording({
 
   db.prepare(
     `
-    INSERT INTO recordings (name, url, file_path, start_time, end_time, duration)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO recordings (name, source_url, stream_id, file_path, start_time, end_time, duration)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `
-  ).run(name, url, file_path, start_time, end_time, duration);
+  ).run(name, source_url, stream_id, file_path, start_time, end_time, duration);
 }
 
 export function deleteRecording(id) {
@@ -84,6 +88,25 @@ export function deleteAllRecordings() {
 
 export function getAllRecordings() {
   return db.prepare(`SELECT * FROM recordings ORDER BY start_time DESC`).all();
+}
+
+export function getAllRecordingsWithStreamInfo() {
+  return db.prepare(
+    `
+    SELECT
+      r.id,
+      r.name,
+      r.file_path,
+      r.start_time,
+      r.stream_id,
+      r.duration,
+      s.name AS stream_name,
+      s.logo_url AS logo_url,
+      s.url AS url
+    FROM recordings r
+    LEFT JOIN streams s ON r.stream_id = s.id
+    ORDER BY r.start_time DESC
+    `).all();
 }
 
 // --- Schedules functions ---

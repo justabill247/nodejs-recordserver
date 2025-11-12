@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
 import { addRecording } from "./db.js";
+import { start } from "repl";
 
 // Recreate __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -42,6 +43,7 @@ export function recordStream(streamObject) {
     ].join(" ");
 
     console.log(`🎙️  Recording started: ${filename}`);
+    const startTime = new Date().toISOString()
     const process = exec(cmd, (err, stdout, stderr) => {
       if (err) {
         console.error("❌ FFmpeg error:", err);
@@ -49,12 +51,14 @@ export function recordStream(streamObject) {
       }
       console.log(`✅ Recording complete: ${outputFile}`);
       
+      // add recording to the db
       addRecording({
         name: streamObject.name, // name
         url: streamObject.url, // url
+        stream_id: streamObject.id,
         file_path: outputFile, // file path
-        start_time: timestamp, // start time
-        end_time: "today", //end time
+        start_time: startTime, // start time
+        end_time: new Date().toISOString(), //end time
         duration: streamObject.duration // duration
       });
       resolve(outputFile);

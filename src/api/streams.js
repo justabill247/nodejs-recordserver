@@ -58,6 +58,7 @@ router.get("/", (req, res) => {
   try {
     const streams = getAllStreams();
     res.json(streams);
+    console.log('streams',streams)
   } catch (err) {
     console.error("❌ Error fetching streams:", err);
     res.status(500).json({ error: "Failed to load streams." });

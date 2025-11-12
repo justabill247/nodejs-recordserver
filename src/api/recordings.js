@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAllRecordings, deleteAllRecordings } from "../db.js";
+import { getAllRecordings, getAllRecordingsWithStreamInfo, deleteAllRecordings } from "../db.js";
 import fs from "fs"
 import path from "path"
 
@@ -15,7 +15,14 @@ const router = Router();
  *         description: A list of all recordings.
  */
 router.get("/", (req, res) => {
-  res.json(getAllRecordings());
+    try {
+    const recordings = getAllRecordingsWithStreamInfo();
+    console.log('recordings',recordings)
+    res.json( recordings );
+  } catch (err) {
+    console.error("Error getting recordings:", err);
+    res.status(500).json({ error: "Failed to get recordings" });
+  }
 });
 
 /**
