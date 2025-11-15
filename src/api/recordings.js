@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { getAllRecordings, getAllRecordingsWithStreamInfo, deleteAllRecordings } from "../db.js";
+import { getAllRecordings, getAllRecordingsWithStreamInfo, deleteAllRecordings } from "../database/db.js";
 import fs from "fs"
 import path from "path"
+import logger from "../services/logger.js";
 
 const router = Router();
 
@@ -17,10 +18,9 @@ const router = Router();
 router.get("/", (req, res) => {
     try {
     const recordings = getAllRecordingsWithStreamInfo();
-    console.log('recordings',recordings)
     res.json( recordings );
   } catch (err) {
-    console.error("Error getting recordings:", err);
+    logger.error("Error getting recordings:", err);
     res.status(500).json({ error: "Failed to get recordings" });
   }
 });
@@ -43,9 +43,9 @@ router.delete("/all", async(req, res) => {
       if(rec.file_path && fs.existsSync(rec.file_path)) {
         try {
           fs.unlinkSync(rec.file_path);
-          console.log(`Deleted file: ${rec.file_path}`);
+          logger.info(`Deleted file: ${rec.file_path}`);
         } catch (err){
-          console.warn(`Could not delete file ${rec.file_path}:`, err.message)
+          logger.warn(`Could not delete file ${rec.file_path}:`, err.message)
         }
       }
     }

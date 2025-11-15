@@ -1,6 +1,8 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { createLogger } from "../services/logger.js";
+const logger = createLogger("Database")
 
 // always point to project root
 const dbPath = path.join(process.cwd(), "serverDb.db")
@@ -11,7 +13,7 @@ if(!fs.existsSync(dir)) fs.mkdirSync(dir, {recursive: true})
 
 // connect to database
 const db = new Database(dbPath);
-console.log("✅ Database loaded:", dbPath)
+logger.info(`Database loaded: ${dbPath}`)
 
 // --- Create tables ---
 db.exec(
@@ -46,7 +48,6 @@ CREATE TABLE IF NOT EXISTS streams (
 );
 `);
 db.pragma("foreign_keys = ON");
-console.log("✅ Tables ready.");
 
 // --- Recordings functions ---
 /**
@@ -76,14 +77,17 @@ export function addRecording({
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `
   ).run(name, source_url, stream_id, file_path, start_time, end_time, duration);
+  logger.info(`Added recording ${name}`)
 }
 
 export function deleteRecording(id) {
   db.prepare(`DELETE FROM recordings WHERE id = ?`).run(id);
+  logger.info(`Deleted recording ${id}`)
 }
 
 export function deleteAllRecordings() {
   db.prepare("DELETE FROM recordings").run();
+  logger.warn('Deleted all recordings!')
 }
 
 export function getAllRecordings() {
@@ -123,14 +127,17 @@ export function addSchedule({
     VALUES (?, ?, ?, ?, ?)
   `
   ).run(name, stream_id, source_url, cron, duration);
+  logger.info(`Added schedule ${name}`)
 }
 
 export function deleteSchedule(name) {
   db.prepare(`DELETE FROM schedules WHERE name = ?`).run(name);
+  logger.info(`Deleted schedule ${name}`)
 }
 
 export function deleteAllSchedules() {
   db.prepare("DELETE FROM schedules").run();
+  logger.warn("Deleted all schedules")
 }
 
 export function getAllSchedules() {
@@ -185,6 +192,7 @@ export function addStream({ name, url, logo_url }) {
     VALUES (?, ?, ?)
   `
   ).run(name, url, logo_url);
+  logger.info(`Added stream ${name}`)
 }
 
 export function deleteStream(id) {
@@ -194,6 +202,7 @@ export function deleteStream(id) {
     DELETE FROM streams WHERE id = ?
   `
   ).run(id);
+  logger.info(`Deleted stream id ${id}`)
 }
 
 export default db;

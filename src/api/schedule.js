@@ -1,12 +1,12 @@
 import express from "express";
-import { scheduleJob, cancelJob, cancelAllJobs, listJobs } from "../cronScheduler.js";
+import { scheduleJob, cancelJob, cancelAllJobs, listJobs } from "../services/cronScheduler.js";
 import {
   addSchedule,
   deleteAllSchedules,
   deleteSchedule,
   getAllSchedulesWithStreamInfo,
   getStream
-} from "../db.js";
+} from "../database/db.js";
 
 const router = express.Router();
 

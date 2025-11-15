@@ -1,5 +1,5 @@
 import dotenv from "dotenv"
-dotenv.config()
+dotenv.config({ override: true })
 
 import express from "express"
 import cors from "cors"
@@ -8,13 +8,16 @@ import { fileURLToPath } from "url"
 import fs from "fs"
 import mime from "mime"
 
-import { setupSwagger } from "./swagger.js"
+import { setupSwagger } from "./api/swagger.js"
 
 import recordingsRouter from "./api/recordings.js";
 import scheduleRouter from "./api/schedule.js";
 import streamRouter from "./api/streams.js";
 
-import { scheduleRecordings } from "./cronScheduler.js";
+import { scheduleRecordings } from "./services/cronScheduler.js";
+
+import {createLogger} from "./services/logger.js"
+const logger = createLogger("Init")
 
 // es modules fix
 const __filename = fileURLToPath(import.meta.url)
@@ -34,6 +37,7 @@ if (!fs.existsSync(LOGOS_DIR)) fs.mkdirSync(LOGOS_DIR, { recursive: true });
 const app = express();
 const PORT = process.env.PORT || 4000;
 const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
+
 
 app.use(express.json());
 
@@ -70,7 +74,7 @@ app.use(
 );
 
 app.get("/debug/audio", (req, res) => {
-  console.log("Recordings directory:", RECORDINGS_DIR);
+  logger.info("Recordings directory:", RECORDINGS_DIR);
   res.json({
     exists: fs.existsSync(path.join(RECORDINGS_DIR, "rec.m4a")),
     path: path.join(RECORDINGS_DIR, "rec.m4a")
@@ -91,10 +95,9 @@ app.get("/", (req, res) => {
 });
 
 // --- Start Server ---
-const port = process.env.PORT || 4000;
-app.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
-  console.log(`📘 API Explorer available at http://localhost:${port}/api-docs`);
-  console.log("📂 Serving recordings from:", RECORDINGS_DIR);
-  console.log("📂 Serving logos from:", LOGOS_DIR);
+
+app.listen(PORT, () => {
+  logger.info(`Server running on http://localhost:${PORT}`);
+  logger.info(`Serving recordings from: ${RECORDINGS_DIR}` );
+  logger.info(`Serving logos from: ${LOGOS_DIR}`);
 });

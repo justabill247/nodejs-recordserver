@@ -1,6 +1,8 @@
 import cron from "node-cron";
 import { recordStream } from "./recorder.js";
-import { addSchedule, getAllSchedules, deleteSchedule } from "./db.js";
+import { addSchedule, getAllSchedules, deleteSchedule } from "../database/db.js";
+import { createLogger } from "./logger.js";
+const logger = createLogger("Scheduler")
 
 const scheduledJobs = new Map();
 
@@ -19,7 +21,7 @@ export function scheduleRecordings() {
       false
     ); // don't re-save to DB on reload
   }
-  console.log(`🔁 Loaded ${schedules.length} saved jobs from DB`);
+  logger.info(`Loaded ${schedules.length} saved jobs from DB`);
 }
 
 export function scheduleJob(name, cronExpr, options, saveToDb = true) {
@@ -33,7 +35,7 @@ export function scheduleJob(name, cronExpr, options, saveToDb = true) {
   });
 
   scheduledJobs.set(name, task);
-  console.log(`⏰ Scheduled job '${name}' with cron '${cronExpr}'`);
+  logger.info(`Scheduled job ${name} with cron ${cronExpr}`);
 
   if (saveToDb) {
     addSchedule({
@@ -56,7 +58,7 @@ export function cancelJob(name) {
     job.stop();
     scheduledJobs.delete(name);
     deleteSchedule(name);
-    console.log(`🛑 Cancelled job '${name}'`);
+    logger.info(`Cancelled job ${name}`);
     return true;
   }
   return false;
@@ -67,5 +69,5 @@ export function cancelAllJobs() {
     job.stop();
     scheduledJobs.delete(id);
   }
-  console.log("✅ All scheduled jobs cancelled.");
+  logger.info("All scheduled jobs cancelled.");
 }

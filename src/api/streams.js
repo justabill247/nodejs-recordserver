@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv"
-import { getAllStreams, addStream, deleteStream } from "../db.js";
+import { getAllStreams, addStream, deleteStream } from "../database/db.js";
 
 dotenv.config()
 
@@ -58,7 +58,6 @@ router.get("/", (req, res) => {
   try {
     const streams = getAllStreams();
     res.json(streams);
-    console.log('streams',streams)
   } catch (err) {
     console.error("❌ Error fetching streams:", err);
     res.status(500).json({ error: "Failed to load streams." });

@@ -27,8 +27,8 @@ temp_recordings/
 *.aac
 
 # Upload folder
-uploads/*
-!uploads/.gitkeep
+logos/*
+!logos/.gitkeep
 
 # OS-specific
 .DS_Store
