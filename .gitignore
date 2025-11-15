@@ -17,6 +17,7 @@ logs/
 *.sqlite
 *.sqlite3
 *.db-journal
+serverDb.db
 
 # Audio recordings
 recordings/
