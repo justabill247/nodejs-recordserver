@@ -3,7 +3,9 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv"
-import { getAllStreams, addStream, deleteStream } from "../database/db.js";
+import { getAllStreams, addStream, deleteStream } from "../database/dbStreams.js";
+import {createLogger} from "../services/logger.js";
+const logger = createLogger("API-Streams")
 
 dotenv.config()
 
@@ -41,12 +43,11 @@ router.post("/", upload.single("logo"), (req, res) => {
     if (!name || !url) {
       return res.status(400).json({ error: "Both 'name' and 'url' are required." });
     }
-
+    logger.info(`Attempting to add ${name}`)
     addStream({ name, url, logo_url });
-    console.log(`✅ Stream added: ${name} (${url})`);
     res.json({ success: true, message: `Stream '${name}' added successfully.` });
   } catch (err) {
-    console.error("❌ Error adding stream:", err);
+    logger.error(`Error adding stream ${err}`)
     res.status(500).json({ error: "Internal server error." });
   }
 });
@@ -59,7 +60,7 @@ router.get("/", (req, res) => {
     const streams = getAllStreams();
     res.json(streams);
   } catch (err) {
-    console.error("❌ Error fetching streams:", err);
+    logger.error(`Error getting all streams ${err}`)
     res.status(500).json({ error: "Failed to load streams." });
   }
 });
@@ -71,10 +72,10 @@ router.delete("/:id", (req, res) => {
   try {
     const { id } = req.params;
     deleteStream(id);
-    console.log(`🗑️  Stream deleted: ${id}`);
+    logger.info(`Deleted ${id}`)
     res.json({ success: true, message: `Stream '${id}' deleted.` });
   } catch (err) {
-    console.error("❌ Error deleting stream:", err);
+    logger.error(`Error deleting stream id ${id}: ${err}`)
     res.status(500).json({ error: "Failed to delete stream." });
   }
 });

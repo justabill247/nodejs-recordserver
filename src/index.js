@@ -1,6 +1,6 @@
 import dotenv from "dotenv"
 dotenv.config({ override: true })
-
+import { runMigrations } from "./database/migrations.js";
 import express from "express"
 import cors from "cors"
 import path from "path"
@@ -38,6 +38,8 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
 
+// init db
+runMigrations()
 
 app.use(express.json());
 

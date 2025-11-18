@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { recordStream } from "./recorder.js";
-import { addSchedule, getAllSchedules, deleteSchedule } from "../database/db.js";
+import { addSchedule, getAllSchedules, deleteSchedule } from "../database/dbSchedule.js";
 import { createLogger } from "./logger.js";
 const logger = createLogger("Scheduler")
 
@@ -25,13 +25,20 @@ export function scheduleRecordings() {
 }
 
 export function scheduleJob(name, cronExpr, options, saveToDb = true) {
+  
+  // if job exists, stop it, delete it, will be overwritten
   if (scheduledJobs.has(name)) {
     scheduledJobs.get(name).stop();
     scheduledJobs.delete(name);
   }
 
   const task = cron.schedule(cronExpr, () => {
-    recordStream(options);
+
+      logger.info(`Attepmting to record ${name}`)
+      recordStream(options)
+      .then(file => logger.info(`Succesfully recorded ${name} to ${file}`))
+      .catch(err => logger.error(`Failed to record ${name}, ${err}`))
+    
   });
 
   scheduledJobs.set(name, task);

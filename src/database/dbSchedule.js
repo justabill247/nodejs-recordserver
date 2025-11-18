@@ -1,0 +1,60 @@
+import db from "./index.js";
+import { createLogger } from "../services/logger.js";
+const logger = createLogger("DbSchedule")
+
+export function addSchedule({
+  name,
+  stream_id = null,
+  source_url,
+  cron,
+  duration,
+}) {
+  db.prepare(
+    `
+    INSERT OR REPLACE INTO schedules (name, stream_id, source_url, cron, duration)
+    VALUES (?, ?, ?, ?, ?)
+  `
+  ).run(name, stream_id, source_url, cron, duration);
+  logger.info(`Added schedule ${name}`)
+}
+
+export function deleteSchedule(name) {
+  db.prepare(`DELETE FROM schedules WHERE name = ?`).run(name);
+  logger.info(`Deleted schedule ${name}`)
+}
+
+export function deleteAllSchedules() {
+  db.prepare("DELETE FROM schedules").run();
+  logger.warn("Deleted all schedules")
+}
+
+export function getAllSchedules() {
+  return db.prepare(`SELECT * FROM schedules`).all();
+}
+
+export function getAllSchedulesWithStreamInfo() {
+  return db
+    .prepare(
+      `
+    SELECT s.*, st.id AS stream_id, st.name AS stream_name, st.url AS stream_url, st.logo_url AS logo_url
+    FROM schedules s
+    LEFT JOIN streams st ON s.stream_id = st.id
+    ORDER BY s.name ASC
+  `
+    )
+    .all()
+    .map((row) => ({
+      name: row.name,
+      cron: row.cron,
+      duration: row.duration,
+      source_url: row.source_url,
+      stream: row.stream_id
+        ? {
+            id: row.stream_id,
+            name: row.stream_name,
+            url: row.stream_url,
+            logo_url: row.logo_url
+          }
+        : null,
+    }));
+}

@@ -1,12 +1,13 @@
 import express from "express";
 import { scheduleJob, cancelJob, cancelAllJobs, listJobs } from "../services/cronScheduler.js";
 import {
-  addSchedule,
   deleteAllSchedules,
   deleteSchedule,
   getAllSchedulesWithStreamInfo,
-  getStream
-} from "../database/db.js";
+} from "../database/dbSchedule.js";
+import {getStream } from "../database/dbStreams.js"
+import { createLogger } from "../services/logger.js";
+const logger = createLogger("API-Schedule")
 
 const router = express.Router();
 
@@ -83,7 +84,7 @@ router.post("/", (req, res) => {
 
     res.json({ success: true, message: `Scheduled '${name}' for ${cron} for ${duration}` });
   } catch (err) {
-    console.error("Error scheduling job:", err);
+    logger.error(`Error adding schedule ${err}`)
     res.status(500).json({ error: "Failed to schedule job" });
   }
 });
@@ -111,7 +112,7 @@ router.delete("/:name", (req, res) => {
     deleteSchedule(name);
     res.json({ success: true, message: `Deleted schedule '${name}'` });
   } catch (err) {
-    console.error("Error deleting schedule:", err);
+    logger.error(`Error deleting schedule ${err}`)
     res.status(500).json({ error: "Failed to delete schedule" });
   }
 });

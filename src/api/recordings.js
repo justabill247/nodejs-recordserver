@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { getAllRecordings, getAllRecordingsWithStreamInfo, deleteAllRecordings } from "../database/db.js";
+import { getAllRecordings, getAllRecordingsWithStreamInfo, deleteAllRecordings } from "../database/dbRecordings.js";
 import fs from "fs"
 import path from "path"
-import logger from "../services/logger.js";
+import {createLogger} from "../services/logger.js";
+const logger = createLogger("API-Recordings")
 
 const router = Router();
 
@@ -52,7 +53,7 @@ router.delete("/all", async(req, res) => {
 
     //delete all from database
     deleteAllRecordings();
-    console.log("All recordings removed from database and storage")
+    logger.info("All recordings removed from database and storage")
 
     res.json({success: true, message: "All recordings deleted successfully"});
   } catch (err) {
