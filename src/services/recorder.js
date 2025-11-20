@@ -28,22 +28,7 @@ export function recordStream(streamObject) {
 
     // Timestamped filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `recording_${timestamp}.m4a`
-    const safeName = ""
-
-    // new filename setup
-    // if stream id, use stream name
-    // if no stream id, use url host
-
-    // if(streamObject.stream_id) {
-
-    // } else {
-    //   const streamURL = new URL(streamObject.url)
-    //   safeName = safeURL.hostname.replaceAll(".","_")
-    // }
-   
-
-    
+    const filename = `recording_${timestamp}.m4a` 
 
     const outputFile = path.join(recordingsDir, filename);
 
@@ -66,7 +51,7 @@ export function recordStream(streamObject) {
 
     // --- spawn ffmpeg process ---
     const ffmpeg = spawn("ffmpeg", ffArgs);
-    logger.info(`Recording started for ${streamObject.name} for ${streamObject.duration}s`);
+    logger.info(`Recording started for ${streamObject.name} for ${streamObject.duration}s sid ${streamObject.schedule_id}`);
     const startTime = new Date().toISOString();
 
     // watch for stderr data
@@ -108,6 +93,7 @@ export function recordStream(streamObject) {
         start_time: startTime, // start time
         end_time: new Date().toISOString(), //end time
         duration: streamObject.duration, // duration
+        schedule_id: streamObject.schedule_id,
       });
 
       // return the name of the output file

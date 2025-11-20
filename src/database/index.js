@@ -16,4 +16,5 @@ if(!fs.existsSync(dir)) fs.mkdirSync(dir, {recursive: true})
 const db = new Database(dbPath);
 logger.info(`Database loaded: ${dbPath}`)
 
+
 export default db;

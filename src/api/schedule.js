@@ -1,9 +1,11 @@
 import express from "express";
 import { scheduleJob, cancelJob, cancelAllJobs, listJobs } from "../services/cronScheduler.js";
 import {
+  addSchedule,
   deleteAllSchedules,
   deleteSchedule,
   getAllSchedulesWithStreamInfo,
+  getScheduleDetails,
 } from "../database/dbSchedule.js";
 import {getStream } from "../database/dbStreams.js"
 import { createLogger } from "../services/logger.js";
@@ -28,32 +30,16 @@ router.get("/", (req, res) => {
   });
 });
 
-/**
- * @openapi
- * /api/schedule:
- *   post:
- *     summary: Create a new scheduled recording
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               cron:
- *                 type: string
- *               duration:
- *                 type: integer
- *               streamId:
- *                 type: integer
- *               url:
- *                 type: string
- *     responses:
- *       200:
- *         description: Successfully created schedule.
- */
+router.get("/:id/details", (req, res) => {
+  const scheduleId = req.params.id;
+  const details = getScheduleDetails(scheduleId)
+  if(!details) {
+    return res.status(404).json({error: "Schedule not found"})
+  }
+  res.json(details)
+})
+
+// --- Add a schedule ---
 router.post("/", (req, res) => {
   const { name, cron, duration, streamId, url } = req.body;
 
@@ -76,10 +62,22 @@ router.post("/", (req, res) => {
   if (!finalUrl) {
     return res.status(400).json({ error: "Must include a stream URL or streamId" });
   }
-
+  
+  // save schedule to db, then schedule it with cron
   try {
-    // Schedule the recording job, save it to db
-    scheduleJob(name, cron, { url: finalUrl, id: finalStreamId, duration, name }, true);
+    
+    // save schedule to db first
+    const scheduleId = addSchedule({
+      name,
+      source_url: finalUrl,
+      stream_id: finalStreamId,
+      cron,
+      duration
+    })
+    logger.info(`saved to id ${scheduleId}`)
+
+    // Schedule the recording with cronScheduler, pass
+    scheduleJob(name, cron, { url: finalUrl, id: finalStreamId, duration, name, schedule_id: scheduleId}, false);
 
 
     res.json({ success: true, message: `Scheduled '${name}' for ${cron} for ${duration}` });

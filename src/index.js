@@ -34,15 +34,21 @@ const LOGOS_DIR = path.join(ROOT_DIR, "logos")
 if (!fs.existsSync(RECORDINGS_DIR)) fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
 if (!fs.existsSync(LOGOS_DIR)) fs.mkdirSync(LOGOS_DIR, { recursive: true });
 
-const app = express();
+// .env variables
 const PORT = process.env.PORT || 4000;
 const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
 
-// init db
+// --- Init Database
 runMigrations()
 
+// --- Load and Reschedule Saved Jobs ---
+scheduleRecordings();
+
+// --- Init the express API app
+const app = express()
 app.use(express.json());
 
+// --- Use CORS Middleware ---
 app.use(
   cors({
     origin: allowedOrigin || "*",
@@ -50,17 +56,15 @@ app.use(
   })
 )
 
-// --- Swagger ---
+// --- Serve Swagger API Explorer ---
 setupSwagger(app);
 
-// --- API Routes ===
+// --- Serve API Routes ===
 app.use("/api/recordings", recordingsRouter);
 app.use("/api/schedule", scheduleRouter);
 app.use("/api/streams", streamRouter);
 
-
-
-// --- Serve Recordings ---
+// --- Serve Recording files at /audio ---
 app.use(
   "/audio",
   (req, res, next) => {
@@ -75,31 +79,21 @@ app.use(
   express.static(RECORDINGS_DIR)
 );
 
-app.get("/debug/audio", (req, res) => {
-  logger.info("Recordings directory:", RECORDINGS_DIR);
-  res.json({
-    exists: fs.existsSync(path.join(RECORDINGS_DIR, "rec.m4a")),
-    path: path.join(RECORDINGS_DIR, "rec.m4a")
-  });
-});
-
-// --- Serve Logos ---
+// --- Serve Logo files at /logos---
 app.use("/logos", express.static(LOGOS_DIR));
 
-// --- Load and Reschedule Saved Jobs ---
-scheduleRecordings();
 
-// --- Root Endpoint ---
+
+// --- Serve Root Endpoint ---
 app.get("/", (req, res) => {
   res.send(`
-    <h1>🎙️ Recording Server</h1>
+    <h1>Recording Server</h1>
   `);
 });
 
 // --- Start Server ---
-
 app.listen(PORT, () => {
-  logger.info(`Server running on http://localhost:${PORT}`);
+  logger.info(`API Server running on http://localhost:${PORT}`);
   logger.info(`Serving recordings from: ${RECORDINGS_DIR}` );
   logger.info(`Serving logos from: ${LOGOS_DIR}`);
 });

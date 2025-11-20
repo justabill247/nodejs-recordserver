@@ -11,7 +11,7 @@ const router = Router();
  * @openapi
  * /api/recordings:
  *   get:
- *     summary: Get all streams
+ *     summary: Get all recordings
  *     responses:
  *       200:
  *         description: A list of all recordings.
@@ -33,7 +33,7 @@ router.get("/", (req, res) => {
  *     description: Delete all schedules
  *     responses:
  *       200:
- *         description: Successfully deleted all recordings.
+ *         description: Successfully deleted all schedules.
  */
 router.delete("/all", async(req, res) => {
   try {

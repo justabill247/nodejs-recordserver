@@ -9,18 +9,21 @@ export function addSchedule({
   cron,
   duration,
 }) {
-  db.prepare(
+  const stmt = db.prepare(
     `
     INSERT OR REPLACE INTO schedules (name, stream_id, source_url, cron, duration)
     VALUES (?, ?, ?, ?, ?)
   `
-  ).run(name, stream_id, source_url, cron, duration);
-  logger.info(`Added schedule ${name}`)
+  );
+
+  const result = stmt.run(name, stream_id, source_url, cron, duration);
+  logger.info(`Added schedule ${name} with id ${result.lastInsertRowid}`)
+  return result.lastInsertRowid
 }
 
-export function deleteSchedule(name) {
-  db.prepare(`DELETE FROM schedules WHERE name = ?`).run(name);
-  logger.info(`Deleted schedule ${name}`)
+export function deleteSchedule(id) {
+  db.prepare(`DELETE FROM schedules WHERE id = ?`).run(id);
+  logger.info(`Deleted schedule ${id}`)
 }
 
 export function deleteAllSchedules() {
@@ -44,6 +47,7 @@ export function getAllSchedulesWithStreamInfo() {
     )
     .all()
     .map((row) => ({
+      id: row.id,
       name: row.name,
       cron: row.cron,
       duration: row.duration,
@@ -57,4 +61,38 @@ export function getAllSchedulesWithStreamInfo() {
           }
         : null,
     }));
+}
+
+export function getScheduleDetails(id) {
+  // get schedule and its stream info
+  const schedule = db.prepare(`
+    SELECT s.*, st.id AS stream_id, st.name AS stream_name, 
+                st.url AS stream_url, st.logo_url AS logo_url
+    FROM schedules s
+    LEFT JOIN streams st ON s.stream_id = st.id
+    WHERE s.id = ?
+    `).get(id)
+
+  const recordings = db.prepare(`
+    SELECT r.*
+    FROM recordings r
+    WHERE r.schedule_id = ?
+    ORDER BY r.start_time DESC
+    `).all(schedule.id)
+
+    return {
+      id: schedule.id,
+      name: schedule.name,
+      cron: schedule.cron,
+      duration: schedule.duration,
+
+      stream: schedule.stream_id ? {
+        id: schedule.stream_id,
+        name: schedule.stream_name, 
+        url: schedule.stream_url, 
+        logo_url: schedule.stream_logo
+      } : null,
+
+      recordings
+    }
 }

@@ -10,14 +10,15 @@ export function addRecording({
   start_time,
   end_time,
   duration,
+  schedule_id
 }) {
 
   db.prepare(
     `
-    INSERT INTO recordings (name, source_url, stream_id, file_path, start_time, end_time, duration)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO recordings (name, source_url, stream_id, file_path, start_time, end_time, duration, schedule_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `
-  ).run(name, source_url, stream_id, file_path, start_time, end_time, duration);
+  ).run(name, source_url, stream_id, file_path, start_time, end_time, duration, schedule_id);
   logger.info(`Added recording ${name}`)
 }
 
