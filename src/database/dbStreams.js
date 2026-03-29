@@ -1,6 +1,6 @@
 import db from "./index.js";
 import { createLogger } from "../services/logger.js";
-const logger = createLogger("DbRecordings")
+const logger = createLogger("DbStreams")
 
 export function getAllStreams() {
   return db.prepare("SELECT * FROM streams ORDER BY name ASC").all();
@@ -27,7 +27,7 @@ export function addStream({ name, url, logo_url }) {
 }
 
 export function deleteStream(id) {
-  console.log("deleting stream", id);
+  logger.info(`Deleting stream: ${id}`);
   db.prepare(
     `
     DELETE FROM streams WHERE id = ?

@@ -1,4 +1,5 @@
 import express from "express";
+import cron from "node-cron";
 import { scheduleJob, cancelJob, cancelAllJobs, listJobs } from "../services/cronScheduler.js";
 import {
   addSchedule,
@@ -10,6 +11,19 @@ import {
 import {getStream } from "../database/dbStreams.js"
 import { createLogger } from "../services/logger.js";
 const logger = createLogger("API-Schedule")
+
+/**
+ * Validate cron expression
+ * @param {string} cronExpr - Cron expression to validate
+ * @returns {boolean} - True if valid
+ */
+function isValidCronExpression(cronExpr) {
+  try {
+    return cron.validate(cronExpr);
+  } catch {
+    return false;
+  }
+}
 
 const router = express.Router();
 
@@ -47,6 +61,16 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: "Missing required fields: name, cron, duration" });
   }
 
+  // Validate cron expression
+  if (!isValidCronExpression(cron)) {
+    return res.status(400).json({ error: "Invalid cron expression format" });
+  }
+
+  // Validate duration is a positive number
+  if (typeof duration !== 'number' || duration <= 0) {
+    return res.status(400).json({ error: "Duration must be a positive number" });
+  }
+
   // Determine final stream details
   let finalUrl = url;
   let finalStreamId = streamId || null;
@@ -65,7 +89,6 @@ router.post("/", (req, res) => {
   
   // save schedule to db, then schedule it with cron
   try {
-    
     // save schedule to db first
     const scheduleId = addSchedule({
       name,
@@ -73,63 +96,84 @@ router.post("/", (req, res) => {
       stream_id: finalStreamId,
       cron,
       duration
-    })
-    logger.info(`saved to id ${scheduleId}`)
+    });
+    logger.info(`Saved schedule '${name}' to id ${scheduleId}`);
 
-    // Schedule the recording with cronScheduler, pass
-    scheduleJob(name, cron, { url: finalUrl, id: finalStreamId, duration, name, schedule_id: scheduleId}, false);
+    // Schedule the recording with cronScheduler
+    scheduleJob(name, cron, { 
+      url: finalUrl, 
+      id: finalStreamId, 
+      duration, 
+      name, 
+      schedule_id: scheduleId
+    }, false);
 
-
-    res.json({ success: true, message: `Scheduled '${name}' for ${cron} for ${duration}` });
+    logger.info(`Scheduled job '${name}' with cron: ${cron}`);
+    res.status(201).json({ 
+      success: true, 
+      message: `Scheduled '${name}' for ${cron} (duration: ${duration}s)`,
+      scheduleId 
+    });
   } catch (err) {
-    logger.error(`Error adding schedule ${err}`)
+    logger.error(`Error adding schedule: ${err.message}`, err);
     res.status(500).json({ error: "Failed to schedule job" });
   }
 });
 
 /**
  * @openapi
- * /api/schedule/{scheduleName}:
+ * /api/schedule/{id}:
  *   delete:
- *     description: Delete schedule
+ *     description: Delete schedule by ID
  *     parameters:
  *       - in: path
- *         name: "scheduleName"
+ *         name: id
+ *         required: true
  *         schema:
- *             string: integer
- *             description: name of schedule to delete
+ *           type: integer
+ *         description: ID of schedule to delete
  *     responses:
  *       200:
  *         description: Successfully deleted schedule.
+ *       404:
+ *         description: Schedule not found.
  */
-router.delete("/:name", (req, res) => {
-  const { name } = req.params;
+router.delete("/:id", (req, res) => {
+  const { id } = req.params;
 
   try {
-    cancelJob(name);
-    deleteSchedule(name);
-    res.json({ success: true, message: `Deleted schedule '${name}'` });
+    const canceled = cancelJob(id);
+    if (!canceled) {
+      return res.status(404).json({ error: "Schedule not found or not active" });
+    }
+    deleteSchedule(id);
+    logger.info(`Deleted schedule: ${id}`);
+    res.json({ success: true, message: `Deleted schedule '${id}'` });
   } catch (err) {
-    logger.error(`Error deleting schedule ${err}`)
+    logger.error(`Error deleting schedule ${id}: ${err.message}`, err);
     res.status(500).json({ error: "Failed to delete schedule" });
   }
 });
 
 /**
  * @openapi
- * /api/schedule/:
+ * /api/schedule/all:
  *   delete:
  *     description: Delete all schedules
  *     responses:
  *       200:
  *         description: Successfully deleted all schedules.
  */
-router.post("/deleteAll", (req, res) => {
-
+router.delete("/all", (req, res) => {
+  try {
     cancelAllJobs();
     deleteAllSchedules();
-    res.json({ success: true, message: `Deleted all schedules` });
-
+    logger.info("All schedules deleted");
+    res.json({ success: true, message: "Deleted all schedules" });
+  } catch (err) {
+    logger.error(`Error deleting all schedules: ${err.message}`, err);
+    res.status(500).json({ error: "Failed to delete all schedules" });
+  }
 });
 
 export default router;

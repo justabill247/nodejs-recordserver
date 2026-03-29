@@ -12,7 +12,6 @@ const projectRoot = path.join(__dirname, "..","..");
 
 // --- Logs folder at project root ---
 const logDir = path.join(projectRoot, "logs");
-console.log(`logdir ${logDir}`)
 if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 
 // --- Base logger ---

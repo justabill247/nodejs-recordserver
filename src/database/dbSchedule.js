@@ -90,7 +90,7 @@ export function getScheduleDetails(id) {
         id: schedule.stream_id,
         name: schedule.stream_name, 
         url: schedule.stream_url, 
-        logo_url: schedule.stream_logo
+        logo_url: schedule.logo_url
       } : null,
 
       recordings

@@ -57,7 +57,7 @@ router.delete("/all", async(req, res) => {
 
     res.json({success: true, message: "All recordings deleted successfully"});
   } catch (err) {
-    console.error("Error deleting all recorings:", err)
+    logger.error("Error deleting all recordings:", err)
     res.status(500).json({error:"Failed to delete recordings."})
   }
 })

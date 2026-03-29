@@ -1,20 +1,26 @@
 import Database from "better-sqlite3";
-
+import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import { createLogger } from "../services/logger.js";
-const logger = createLogger("Database")
 
-// always point to project root
-const dbPath = path.join(process.cwd(), "serverDb.db")
+dotenv.config();
 
-// create folder if needed
-const dir = path.dirname(dbPath)
-if(!fs.existsSync(dir)) fs.mkdirSync(dir, {recursive: true})
+const logger = createLogger("Database");
 
-// connect to database
+// Use environment variable or default to project root
+const dbPath = process.env.DB_PATH 
+  ? path.resolve(process.env.DB_PATH)
+  : path.join(process.cwd(), "serverDb.db");
+
+// Create folder if needed
+const dir = path.dirname(dbPath);
+if (!fs.existsSync(dir)) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+// Connect to database
 const db = new Database(dbPath);
-logger.info(`Database loaded: ${dbPath}`)
-
+logger.info(`Database initialized: ${dbPath}`);
 
 export default db;
