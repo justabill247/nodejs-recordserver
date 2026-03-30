@@ -21,12 +21,21 @@ export function addSchedule({
   return result.lastInsertRowid
 }
 
-export function deleteSchedule(id) {
+export function deleteSchedule(id, deleteRecordings = false) {
+  if (deleteRecordings) {
+    // Delete all recordings associated with this schedule
+    db.prepare(`DELETE FROM recordings WHERE schedule_id = ?`).run(id);
+    logger.info(`Deleted all recordings for schedule ${id}`);
+  }
   db.prepare(`DELETE FROM schedules WHERE id = ?`).run(id);
   logger.info(`Deleted schedule ${id}`)
 }
 
-export function deleteAllSchedules() {
+export function deleteAllSchedules(deleteRecordings = false) {
+  if (deleteRecordings) {
+    db.prepare("DELETE FROM recordings").run();
+    logger.warn("Deleted all recordings");
+  }
   db.prepare("DELETE FROM schedules").run();
   logger.warn("Deleted all schedules")
 }

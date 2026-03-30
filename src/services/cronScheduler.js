@@ -88,7 +88,7 @@ export function listJobs() {
   return Array.from(scheduledJobs.keys());
 }
 
-export function cancelJob(nameOrId) {
+export function cancelJob(nameOrId, deleteRecordings = false) {
   let jobName = nameOrId;
   
   // Check if this is a schedule_id lookup
@@ -106,10 +106,10 @@ export function cancelJob(nameOrId) {
     if (job.options && job.options.schedule_id) {
       const scheduleId = job.options.schedule_id;
       scheduledJobIds.delete(String(scheduleId));
-      deleteSchedule(scheduleId);
+      deleteSchedule(scheduleId, deleteRecordings);
     } else {
       // Fallback to name if no ID available
-      deleteSchedule(jobName);
+      deleteSchedule(jobName, deleteRecordings);
     }
     
     logger.info(`Cancelled job ${jobName}`);
@@ -119,10 +119,11 @@ export function cancelJob(nameOrId) {
   return false;
 }
 
-export function cancelAllJobs() {
+export function cancelAllJobs(deleteRecordings = false) {
   for (const [id, job] of scheduledJobs.entries()) {
     job.stop();
     scheduledJobs.delete(id);
   }
+  scheduledJobIds.clear();
   logger.info("All scheduled jobs cancelled.");
 }

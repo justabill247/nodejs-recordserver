@@ -122,6 +122,37 @@ router.post("/", (req, res) => {
 
 /**
  * @openapi
+ * /api/schedule/all:
+ *   delete:
+ *     description: Delete all schedules
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               deleteRecordings:
+ *                 type: boolean
+ *                 description: Also delete all associated recordings
+ *     responses:
+ *       200:
+ *         description: Successfully deleted all schedules.
+ */
+router.delete("/all", (req, res) => {
+  const { deleteRecordings = false } = req.body || {};
+  try {
+    cancelAllJobs();
+    deleteAllSchedules(deleteRecordings);
+    logger.info(`All schedules deleted${deleteRecordings ? ' and all recordings deleted' : ''}`);
+    res.json({ success: true, message: `Deleted all schedules${deleteRecordings ? ' and all recordings' : ''}` });
+  } catch (err) {
+    logger.error(`Error deleting all schedules: ${err.message}`, err);
+    res.status(500).json({ error: "Failed to delete all schedules" });
+  }
+});
+
+/**
+ * @openapi
  * /api/schedule/{id}:
  *   delete:
  *     description: Delete schedule by ID
@@ -132,6 +163,15 @@ router.post("/", (req, res) => {
  *         schema:
  *           type: integer
  *         description: ID of schedule to delete
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               deleteRecordings:
+ *                 type: boolean
+ *                 description: Also delete all associated recordings
  *     responses:
  *       200:
  *         description: Successfully deleted schedule.
@@ -140,39 +180,18 @@ router.post("/", (req, res) => {
  */
 router.delete("/:id", (req, res) => {
   const { id } = req.params;
+  const { deleteRecordings = false } = req.body || {};
 
   try {
-    const canceled = cancelJob(id);
+    const canceled = cancelJob(id, deleteRecordings);
     if (!canceled) {
       return res.status(404).json({ error: "Schedule not found or not active" });
     }
-    deleteSchedule(id);
-    logger.info(`Deleted schedule: ${id}`);
-    res.json({ success: true, message: `Deleted schedule '${id}'` });
+    logger.info(`Deleted schedule: ${id}${deleteRecordings ? ' and associated recordings' : ''}`);
+    res.json({ success: true, message: `Deleted schedule '${id}'${deleteRecordings ? ' and associated recordings' : ''}` });
   } catch (err) {
     logger.error(`Error deleting schedule ${id}: ${err.message}`, err);
     res.status(500).json({ error: "Failed to delete schedule" });
-  }
-});
-
-/**
- * @openapi
- * /api/schedule/all:
- *   delete:
- *     description: Delete all schedules
- *     responses:
- *       200:
- *         description: Successfully deleted all schedules.
- */
-router.delete("/all", (req, res) => {
-  try {
-    cancelAllJobs();
-    deleteAllSchedules();
-    logger.info("All schedules deleted");
-    res.json({ success: true, message: "Deleted all schedules" });
-  } catch (err) {
-    logger.error(`Error deleting all schedules: ${err.message}`, err);
-    res.status(500).json({ error: "Failed to delete all schedules" });
   }
 });
 
