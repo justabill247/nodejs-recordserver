@@ -7,6 +7,7 @@ import path from "path"
 import { fileURLToPath } from "url"
 import fs from "fs"
 import mime from "mime"
+import http from "http"
 
 import { setupSwagger } from "./api/swagger.js"
 
@@ -15,6 +16,7 @@ import scheduleRouter from "./api/schedule.js";
 import streamRouter from "./api/streams.js";
 
 import { scheduleRecordings } from "./services/cronScheduler.js";
+import { wsManager } from "./services/wsManager.js";
 
 import {createLogger} from "./services/logger.js"
 const logger = createLogger("Init")
@@ -92,8 +94,12 @@ app.get("/", (req, res) => {
 });
 
 // --- Start Server ---
-app.listen(PORT, () => {
+const server = http.createServer(app);
+wsManager.initialize(server);
+
+server.listen(PORT, () => {
   logger.info(`API Server running on http://localhost:${PORT}`);
+  logger.info(`WebSocket server ready at ws://localhost:${PORT}/ws`);
   logger.info(`Serving recordings from: ${RECORDINGS_DIR}` );
   logger.info(`Serving logos from: ${LOGOS_DIR}`);
 });

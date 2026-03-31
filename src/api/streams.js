@@ -2,48 +2,66 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import dotenv from "dotenv"
-import { getAllStreams, addStream, deleteStream } from "../database/dbStreams.js";
-import {createLogger} from "../services/logger.js";
-const logger = createLogger("API-Streams")
+import dotenv from "dotenv";
+import {
+  getAllStreams,
+  getStreamDetails,
+  getStreamDetailsWithRecordings,
+  addStream,
+  deleteStream,
+  updateStream,
+} from "../database/dbStreams.js";
+import { createLogger } from "../services/logger.js";
+const logger = createLogger("API-Streams");
 
-dotenv.config()
+dotenv.config();
 
 const router = express.Router();
 
 // Use environment variable or default to project root/logos
-const LOGOS_DIR = process.env.LOGOS_DIR || path.join(process.cwd(), 'logos')
+const LOGOS_DIR = process.env.LOGOS_DIR || path.join(process.cwd(), "logos");
 
 if (!fs.existsSync(LOGOS_DIR)) {
-  fs.mkdirSync(LOGOS_DIR, { recursive: true })
+  fs.mkdirSync(LOGOS_DIR, { recursive: true });
 }
 
 // --- Multer setup with file type validation ---
-const allowedLogoTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+const allowedLogoTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+];
 
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, LOGOS_DIR),
   filename: (_, file, cb) => {
     // Sanitize filename: remove special characters, keep only alphanumeric and extension
-    const sanitized = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
+    const sanitized = file.originalname.replace(/[^a-zA-Z0-9.]/g, "_");
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(sanitized)}`;
     cb(null, unique);
   },
 });
 
-const upload = multer({ 
+const upload = multer({
   storage,
   fileFilter: (_, file, cb) => {
     // Validate file type
     if (allowedLogoTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`Invalid file type: ${file.mimetype}. Allowed types: ${allowedLogoTypes.join(', ')}`), false);
+      cb(
+        new Error(
+          `Invalid file type: ${file.mimetype}. Allowed types: ${allowedLogoTypes.join(", ")}`,
+        ),
+        false,
+      );
     }
   },
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
 });
 
 // --- API Routes ---
@@ -63,7 +81,9 @@ router.post("/", upload.single("logo"), (req, res) => {
     const logo_url = req.file ? `/logos/${req.file.filename}` : null;
 
     if (!name || !url) {
-      return res.status(400).json({ error: "Both 'name' and 'url' are required." });
+      return res
+        .status(400)
+        .json({ error: "Both 'name' and 'url' are required." });
     }
 
     // Validate URL format
@@ -75,14 +95,18 @@ router.post("/", upload.single("logo"), (req, res) => {
 
     logger.info(`Attempting to add stream: ${name}`);
     addStream({ name, url, logo_url });
-    res.status(201).json({ success: true, message: `Stream '${name}' added successfully.` });
+    res
+      .status(201)
+      .json({ success: true, message: `Stream '${name}' added successfully.` });
   } catch (err) {
     // Handle multer validation errors
-    if (err.message && err.message.includes('Invalid file type')) {
+    if (err.message && err.message.includes("Invalid file type")) {
       return res.status(400).json({ error: err.message });
     }
-    if (err.message && err.message.includes('File too large')) {
-      return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+    if (err.message && err.message.includes("File too large")) {
+      return res
+        .status(400)
+        .json({ error: "File too large. Maximum size is 5MB." });
     }
     logger.error(`Error adding stream: ${err.message}`, err);
     res.status(500).json({ error: "Internal server error." });
@@ -97,10 +121,60 @@ router.get("/", (req, res) => {
     const streams = getAllStreams();
     res.json(streams);
   } catch (err) {
-    logger.error(`Error getting all streams ${err}`)
+    logger.error(`Error getting all streams ${err}`);
     res.status(500).json({ error: "Failed to load streams." });
   }
 });
+
+/**
+ * Get a single stream by ID with its recordings
+ */
+router.get("/:id/details", async (req, res) => {
+  try {
+    const { id } = req.params;
+    logger.info(`Fetching details for stream: ${id}`);
+    const streamDetails = await getStreamDetailsWithRecordings(id);
+    if (!streamDetails) {
+      return res.status(404).json({ error: "Stream not found." });
+    }
+    res.json(streamDetails);
+  } catch (err) {
+    logger.error(`Error fetching details for stream id ${id}: ${err.message}`, err);
+    res.status(500).json({ error: "Failed to fetch stream details." });
+  }
+});
+
+
+router.put("/:id", upload.single("logo"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, url } = req.body;
+    let logo_url = null;
+
+    if (req.file) {
+      logo_url = `/logos/${req.file.filename}`;
+    }
+
+    logger.info(`Attempting to update stream: ${id}`);
+    await updateStream({ id, name, url, logo_url });
+    res
+      .status(200)
+      .json({ success: true, message: `Stream '${id}' updated successfully.` });
+  } catch (err) {
+    // Handle multer validation errors
+    if (err.message && err.message.includes("Invalid file type")) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.message && err.message.includes("File too large")) {
+      return res
+        .status(400)
+        .json({ error: "File too large. Maximum size is 5MB." });
+    }
+    logger.error(`Error updating stream ${id}: ${err.message}`, err);
+    res.status(500).json({ error: "Internal server error." });
+  }
+});
+
 
 /**
  * Delete a stream by ID

@@ -55,4 +55,21 @@ export function deleteAllRecordings() {
   logger.warn('Deleted all recordings!')
 }
 
+export function getRecordingsByStreamId(streamId) {
+  return db.prepare(
+    `
+    SELECT
+      id,
+      name,
+      file_path,
+      start_time,
+      end_time,
+      duration
+    FROM recordings
+    WHERE stream_id = ?
+    ORDER BY start_time DESC
+    `
+  ).all(streamId);
+}
+
 

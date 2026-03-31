@@ -4,6 +4,7 @@ import {
   addSchedule,
   getAllSchedules,
   deleteSchedule,
+  deleteAllSchedules,
 } from "../database/dbSchedule.js";
 import { createLogger } from "./logger.js";
 const logger = createLogger("Scheduler");
@@ -22,6 +23,7 @@ export function scheduleRecordings() {
         url: s.source_url,
         duration: s.duration,
         name: s.name,
+        id: s.stream_id,
         schedule_id: s.id,
       },
       false
@@ -89,12 +91,19 @@ export function listJobs() {
 }
 
 export function cancelJob(nameOrId, deleteRecordings = false) {
+  logger.info(`cancelJob called with nameOrId='${nameOrId}' (type: ${typeof nameOrId}), deleteRecordings=${deleteRecordings}`);
+  
   let jobName = nameOrId;
+  let scheduleId = null;
   
   // Check if this is a schedule_id lookup
   const mappedName = scheduledJobIds.get(String(nameOrId));
   if (mappedName) {
     jobName = mappedName;
+    scheduleId = String(nameOrId);
+    logger.info(`Found job mapping: ID ${nameOrId} -> job name '${jobName}'`);
+  } else {
+    logger.info(`No job mapping found for '${nameOrId}'`);
   }
   
   const job = scheduledJobs.get(jobName);
@@ -102,20 +111,36 @@ export function cancelJob(nameOrId, deleteRecordings = false) {
     job.stop();
     scheduledJobs.delete(jobName);
     
-    // Remove the ID mapping and delete by ID
-    if (job.options && job.options.schedule_id) {
-      const scheduleId = job.options.schedule_id;
-      scheduledJobIds.delete(String(scheduleId));
-      deleteSchedule(scheduleId, deleteRecordings);
-    } else {
-      // Fallback to name if no ID available
-      deleteSchedule(jobName, deleteRecordings);
+    // Remove the ID mapping if we have it
+    if (scheduleId) {
+      scheduledJobIds.delete(scheduleId);
     }
     
-    logger.info(`Cancelled job ${jobName}`);
-    return true;
+    logger.info(`Cancelled job '${jobName}'`);
+  } else {
+    logger.warn(`Job not found in memory: '${nameOrId}'`);
   }
-  logger.warn(`Job not found: ${nameOrId}`);
+  
+  // Always try to delete from database if we have a schedule ID
+  // This handles cases where job exists or when we're deleting by ID
+  if (scheduleId || !isNaN(nameOrId)) {
+    const idToDelete = scheduleId ? parseInt(scheduleId) : parseInt(nameOrId);
+    if (!isNaN(idToDelete)) {
+      logger.info(`Deleting schedule ID ${idToDelete} from database (deleteRecordings=${deleteRecordings})`);
+      try {
+        deleteSchedule(idToDelete, deleteRecordings);
+        logger.info(`Successfully deleted schedule ${idToDelete} from database`);
+        return true;
+      } catch (err) {
+        logger.error(`Error deleting schedule ${idToDelete} from database: ${err.message}`, err);
+        return false;
+      }
+    } else {
+      logger.warn(`Invalid schedule ID for deletion: '${nameOrId}' (parsed as ${parseInt(nameOrId)})`);
+    }
+  }
+  
+  logger.warn(`Could not determine schedule ID for deletion: '${nameOrId}'`);
   return false;
 }
 
@@ -125,5 +150,9 @@ export function cancelAllJobs(deleteRecordings = false) {
     scheduledJobs.delete(id);
   }
   scheduledJobIds.clear();
+  
+  // Delete all schedules from database
+  deleteAllSchedules(deleteRecordings);
+  
   logger.info("All scheduled jobs cancelled.");
 }

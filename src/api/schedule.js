@@ -1,5 +1,6 @@
 import express from "express";
 import cron from "node-cron";
+import fs from "fs";
 import { scheduleJob, cancelJob, cancelAllJobs, listJobs } from "../services/cronScheduler.js";
 import {
   addSchedule,
@@ -8,6 +9,7 @@ import {
   getAllSchedulesWithStreamInfo,
   getScheduleDetails,
 } from "../database/dbSchedule.js";
+import { getAllRecordings } from "../database/dbRecordings.js";
 import {getStream } from "../database/dbStreams.js"
 import { createLogger } from "../services/logger.js";
 const logger = createLogger("API-Schedule")
@@ -139,12 +141,32 @@ router.post("/", (req, res) => {
  *         description: Successfully deleted all schedules.
  */
 router.delete("/all", (req, res) => {
-  const { deleteRecordings = false } = req.body || {};
+  const { deleteRecordings = true } = req.body || {};
   try {
-    cancelAllJobs();
-    deleteAllSchedules(deleteRecordings);
-    logger.info(`All schedules deleted${deleteRecordings ? ' and all recordings deleted' : ''}`);
-    res.json({ success: true, message: `Deleted all schedules${deleteRecordings ? ' and all recordings' : ''}` });
+    // Get all recordings before deletion
+    const allRecordings = getAllRecordings();
+
+    // Delete files from disk ONLY if deleteRecordings is true
+    if (deleteRecordings) {
+      for(const rec of allRecordings) {
+        if(rec.file_path && fs.existsSync(rec.file_path)) {
+          try {
+            fs.unlinkSync(rec.file_path);
+            logger.info(`Deleted recording file: ${rec.file_path}`);
+          } catch (err){
+            logger.warn(`Could not delete file ${rec.file_path}:`, err.message)
+          }
+        }
+      }
+    } else {
+      logger.info(`Keeping ${allRecordings.length} recording files`);
+    }
+
+    // Cancel all jobs and delete from database
+    // Pass deleteRecordings flag to control whether to delete or keep recordings in DB
+    cancelAllJobs(deleteRecordings);
+    logger.info(`All schedules deleted${deleteRecordings ? ' and recordings' : ' (kept recordings)'}`);
+    res.json({ success: true, message: `Deleted all schedules${deleteRecordings ? ' and recordings' : ' (kept recordings)'}` });
   } catch (err) {
     logger.error(`Error deleting all schedules: ${err.message}`, err);
     res.status(500).json({ error: "Failed to delete all schedules" });
@@ -180,15 +202,39 @@ router.delete("/all", (req, res) => {
  */
 router.delete("/:id", (req, res) => {
   const { id } = req.params;
-  const { deleteRecordings = false } = req.body || {};
+  const { deleteRecordings = true } = req.body || {};
+
+  logger.info(`DELETE /api/schedule/:id called with id='${id}' (type: ${typeof id}), deleteRecordings=${deleteRecordings}`);
 
   try {
+    // Get all recordings for this schedule before deletion
+    const allRecordings = getAllRecordings();
+    const scheduleRecordings = allRecordings.filter(r => r.schedule_id == id);
+
+    // Delete files from disk ONLY if deleteRecordings is true
+    if (deleteRecordings) {
+      for(const rec of scheduleRecordings) {
+        if(rec.file_path && fs.existsSync(rec.file_path)) {
+          try {
+            fs.unlinkSync(rec.file_path);
+            logger.info(`Deleted recording file: ${rec.file_path}`);
+          } catch (err){
+            logger.warn(`Could not delete file ${rec.file_path}:`, err.message)
+          }
+        }
+      }
+    } else {
+      logger.info(`Keeping ${scheduleRecordings.length} recording files for schedule ${id}`);
+    }
+
+    // Cancel the cron job and delete from database
+    // Pass deleteRecordings flag to control whether to delete or keep recordings in DB
     const canceled = cancelJob(id, deleteRecordings);
     if (!canceled) {
       return res.status(404).json({ error: "Schedule not found or not active" });
     }
-    logger.info(`Deleted schedule: ${id}${deleteRecordings ? ' and associated recordings' : ''}`);
-    res.json({ success: true, message: `Deleted schedule '${id}'${deleteRecordings ? ' and associated recordings' : ''}` });
+    logger.info(`Deleted schedule: ${id}${deleteRecordings ? ' and recordings' : ' (kept recordings)'}`);
+    res.json({ success: true, message: `Deleted schedule '${id}'${deleteRecordings ? ' and recordings' : ' (kept recordings)'}` });
   } catch (err) {
     logger.error(`Error deleting schedule ${id}: ${err.message}`, err);
     res.status(500).json({ error: "Failed to delete schedule" });

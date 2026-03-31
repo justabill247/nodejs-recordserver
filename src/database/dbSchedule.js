@@ -22,22 +22,59 @@ export function addSchedule({
 }
 
 export function deleteSchedule(id, deleteRecordings = false) {
-  if (deleteRecordings) {
-    // Delete all recordings associated with this schedule
-    db.prepare(`DELETE FROM recordings WHERE schedule_id = ?`).run(id);
-    logger.info(`Deleted all recordings for schedule ${id}`);
+  try {
+    if (deleteRecordings) {
+      // Delete all recordings associated with this schedule
+      const recordingsResult = db.prepare(`DELETE FROM recordings WHERE schedule_id = ?`).run(id);
+      if (recordingsResult.changes > 0) {
+        logger.info(`Deleted ${recordingsResult.changes} recordings for schedule ${id}`);
+      }
+    } else {
+      // Keep recordings but disconnect them from schedule (avoid FK constraint)
+      const updateResult = db.prepare(`UPDATE recordings SET schedule_id = NULL WHERE schedule_id = ?`).run(id);
+      if (updateResult.changes > 0) {
+        logger.info(`Disconnected ${updateResult.changes} recordings from schedule ${id}`);
+      }
+    }
+    
+    // Now delete the schedule
+    const scheduleResult = db.prepare(`DELETE FROM schedules WHERE id = ?`).run(id);
+    if (scheduleResult.changes > 0) {
+      logger.info(`Deleted schedule ${id}`);
+    } else {
+      logger.warn(`Schedule ${id} not found for deletion`);
+    }
+  } catch (err) {
+    logger.error(`Error deleting schedule ${id}: ${err.message}`, err);
+    throw err;
   }
-  db.prepare(`DELETE FROM schedules WHERE id = ?`).run(id);
-  logger.info(`Deleted schedule ${id}`)
 }
 
 export function deleteAllSchedules(deleteRecordings = false) {
-  if (deleteRecordings) {
-    db.prepare("DELETE FROM recordings").run();
-    logger.warn("Deleted all recordings");
+  try {
+    if (deleteRecordings) {
+      // Delete all recordings
+      const recordingsResult = db.prepare("DELETE FROM recordings").run();
+      if (recordingsResult.changes > 0) {
+        logger.warn(`Deleted all ${recordingsResult.changes} recordings`);
+      }
+    } else {
+      // Keep recordings but disconnect them from schedules (avoid FK constraint)
+      const updateResult = db.prepare("UPDATE recordings SET schedule_id = NULL").run();
+      if (updateResult.changes > 0) {
+        logger.warn(`Disconnected all ${updateResult.changes} recordings from schedules`);
+      }
+    }
+    
+    // Now delete all schedules
+    const schedulesResult = db.prepare("DELETE FROM schedules").run();
+    if (schedulesResult.changes > 0) {
+      logger.warn(`Deleted all ${schedulesResult.changes} schedules`);
+    }
+  } catch (err) {
+    logger.error(`Error deleting all schedules: ${err.message}`, err);
+    throw err;
   }
-  db.prepare("DELETE FROM schedules").run();
-  logger.warn("Deleted all schedules")
 }
 
 export function getAllSchedules() {

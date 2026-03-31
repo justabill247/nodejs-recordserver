@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { addRecording } from "../database/dbRecordings.js";
 import { spawn } from "child_process";
+import { wsManager } from "./wsManager.js";
 
 import { createLogger } from "./logger.js";
 const logger = createLogger("Recorder");
@@ -61,8 +62,12 @@ export function recordStream(streamObject) {
 
     // --- spawn ffmpeg process ---
     const ffmpeg = spawn("ffmpeg", ffArgs);
+    const recordingId = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     logger.info(`Recording started for ${streamObject.name} for ${streamObject.duration}s sid ${streamObject.schedule_id}`);
     const startTime = new Date().toISOString();
+
+    // Notify WebSocket that recording started
+    wsManager.startRecording(recordingId, streamObject.name, streamObject.duration, streamObject.stream_name || "Unknown");
 
     // Capture ffmpeg output for debugging
     let ffmpegOutput = "";
@@ -94,6 +99,9 @@ export function recordStream(streamObject) {
     ffmpeg.on("close", (code, signal) => {
       // Clear timeout
       clearTimeout(timeout);
+
+      // Notify WebSocket that recording stopped
+      wsManager.stopRecording(recordingId);
 
       // Recording was not successful
       if (code !== 0) {
