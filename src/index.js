@@ -15,10 +15,10 @@ import recordingsRouter from "./api/recordings.js";
 import scheduleRouter from "./api/schedule.js";
 import streamRouter from "./api/streams.js";
 
-import { scheduleRecordings } from "./services/cronScheduler.js";
+import { getScheduleStateSnapshot, scheduleRecordings } from "./services/cronScheduler.js";
 import { wsManager } from "./services/wsManager.js";
 
-import {createLogger} from "./services/logger.js"
+import {createLogger, registerProcessEventLogging} from "./services/logger.js"
 const logger = createLogger("Init")
 
 // es modules fix
@@ -39,6 +39,8 @@ if (!fs.existsSync(LOGOS_DIR)) fs.mkdirSync(LOGOS_DIR, { recursive: true });
 // .env variables
 const PORT = process.env.PORT || 4000;
 const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
+
+registerProcessEventLogging("ProcessLifecycle");
 
 // --- Init Database
 runMigrations()
@@ -95,7 +97,7 @@ app.get("/", (req, res) => {
 
 // --- Start Server ---
 const server = http.createServer(app);
-wsManager.initialize(server);
+wsManager.initialize(server, { getScheduleState: getScheduleStateSnapshot });
 
 server.listen(PORT, () => {
   logger.info(`API Server running on http://localhost:${PORT}`);

@@ -7,11 +7,93 @@ import { wsManager } from "./wsManager.js";
 
 import { createLogger } from "./logger.js";
 const logger = createLogger("Recorder");
-const logProgress = process.env.LOG_PROGRESS !== "false"
+const ffmpegLogger = createLogger("FFmpeg");
+const ffmpegLogMode = (process.env.FFMPEG_LOG_MODE || "basic").toLowerCase();
 
 // Recreate __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function formatRecordingContext({ recordingId, name, scheduleId, streamId, outputFile }) {
+  return `[${recordingId}] name="${name}" schedule=${scheduleId ?? "none"} stream=${streamId ?? "none"} output="${outputFile}"`;
+}
+
+function flushFfmpegLines(bufferState, logLine) {
+  let buffer = bufferState.buffer;
+  let delimiterIndex = buffer.search(/[\r\n]/);
+
+  while (delimiterIndex !== -1) {
+    const rawLine = buffer.slice(0, delimiterIndex);
+    const delimiter = buffer[delimiterIndex];
+    const nextIndex = delimiterIndex + (delimiter === "\r" && buffer[delimiterIndex + 1] === "\n" ? 2 : 1);
+    const line = rawLine.trim();
+
+    if (line) {
+      logLine(line);
+    }
+
+    buffer = buffer.slice(nextIndex);
+    delimiterIndex = buffer.search(/[\r\n]/);
+  }
+
+  bufferState.buffer = buffer;
+}
+
+function classifyFfmpegLine(line) {
+  if (/\b(error|failed|invalid|unable|could not)\b/i.test(line)) {
+    return "error";
+  }
+
+  if (/\b(warn(ing)?)\b/i.test(line)) {
+    return "warn";
+  }
+
+  return "info";
+}
+
+function isProgressLine(line) {
+  return /(size=|time=|bitrate=|speed=)/i.test(line);
+}
+
+function isWarningOrErrorLine(line) {
+  return classifyFfmpegLine(line) !== "info";
+}
+
+function isSuppressedFfmpegLine(line) {
+  return [
+    /Queue input is backward in time/i,
+    /Non-monotonic DTS/i,
+    /incorrect timestamps in the output file/i,
+  ].some((pattern) => pattern.test(line));
+}
+
+function shouldLogFfmpegLine(line) {
+  if (isSuppressedFfmpegLine(line)) {
+    return false;
+  }
+
+  if (isProgressLine(line)) {
+    return ffmpegLogMode !== "quiet";
+  }
+
+  if (isWarningOrErrorLine(line)) {
+    return true;
+  }
+
+  return ffmpegLogMode === "verbose";
+}
+
+function getProgressLogIntervalMs(durationSeconds) {
+  if (durationSeconds >= 3600) {
+    return 10 * 60 * 1000;
+  }
+
+  if (durationSeconds > 600) {
+    return 5 * 60 * 1000;
+  }
+
+  return null;
+}
 
 /**
  * Record an audio-only M3U8 stream to an .m4a file using FFmpeg.
@@ -62,35 +144,93 @@ export function recordStream(streamObject) {
 
     // --- spawn ffmpeg process ---
     const ffmpeg = spawn("ffmpeg", ffArgs);
-    const recordingId = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const recordingId = `rec_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    const recordingContext = formatRecordingContext({
+      recordingId,
+      name: streamObject.name,
+      scheduleId: streamObject.schedule_id,
+      streamId: streamObject.id,
+      outputFile,
+    });
+    const ffmpegStartedAt = Date.now();
     logger.info(`Recording started for ${streamObject.name} for ${streamObject.duration}s sid ${streamObject.schedule_id}`);
     const startTime = new Date().toISOString();
+    ffmpegLogger.info(
+      `${recordingContext} Spawning ffmpeg with duration=${streamObject.duration}s url="${streamObject.url}" args=${JSON.stringify(ffArgs)}`,
+    );
 
     // Notify WebSocket that recording started
     wsManager.startRecording(recordingId, streamObject.name, streamObject.duration, streamObject.stream_name || "Unknown");
 
     // Capture ffmpeg output for debugging
     let ffmpegOutput = "";
+    let stderrBuffer = "";
+    let stdoutBuffer = "";
+    let lastProgressLogAt = 0;
+    let lastProgressLine = "";
+    const progressLogIntervalMs = getProgressLogIntervalMs(streamObject.duration);
+
+    const logFfmpegLine = (line, source) => {
+      if (isProgressLine(line)) {
+        lastProgressLine = line;
+        if (ffmpegLogMode === "quiet" || progressLogIntervalMs === null) {
+          return;
+        }
+
+        const now = Date.now();
+        if (now - lastProgressLogAt >= progressLogIntervalMs) {
+          lastProgressLogAt = now;
+          ffmpegLogger.info(`${recordingContext} progress: ${line}`);
+        }
+        return;
+      }
+
+      if (!shouldLogFfmpegLine(line)) {
+        return;
+      }
+
+      const level = classifyFfmpegLine(line);
+      ffmpegLogger.log(level, `${recordingContext} ${source}: ${line}`);
+    };
+
+    ffmpeg.on("spawn", () => {
+      ffmpegLogger.info(`${recordingContext} FFmpeg process started with pid=${ffmpeg.pid}`);
+    });
 
     // watch for stderr data
     ffmpeg.stderr.on("data", (data) => {
-      const line = data.toString();
-      ffmpegOutput += line;
-      // lines that indicate recording in progress
-      if (line.includes("size=") || line.includes("time=")) {
-        if (logProgress) process.stdout.write(".");
-      }
+      const chunk = data.toString();
+      ffmpegOutput += chunk;
+      stderrBuffer += chunk;
+      flushFfmpegLines({
+        get buffer() {
+          return stderrBuffer;
+        },
+        set buffer(value) {
+          stderrBuffer = value;
+        },
+      }, (line) => logFfmpegLine(line, "stderr"));
     });
 
     // watch for stdout data
     ffmpeg.stdout.on("data", (data) => {
-      logger.debug(`FFmpeg stdout: ${data.toString()}`);
+      const chunk = data.toString();
+      stdoutBuffer += chunk;
+      flushFfmpegLines({
+        get buffer() {
+          return stdoutBuffer;
+        },
+        set buffer(value) {
+          stdoutBuffer = value;
+        },
+      }, (line) => logFfmpegLine(line, "stdout"));
     });
     
     // watchdog timer in case something goes wrong and ffmpeg hangs
     const timeout = setTimeout(() => {
       if (!ffmpeg.killed) {
         logger.error("FFmpeg didn't end after duration — stopping FFmpeg cleanly...");
+        ffmpegLogger.error(`${recordingContext} FFmpeg exceeded duration watchdog and will be stopped with SIGINT`);
         ffmpeg.kill("SIGINT");
       }
     }, streamObject.duration * 1000 + 5000); // Add 5s buffer
@@ -100,8 +240,23 @@ export function recordStream(streamObject) {
       // Clear timeout
       clearTimeout(timeout);
 
+      if (stderrBuffer.trim()) {
+        logFfmpegLine(stderrBuffer.trim(), "stderr");
+      }
+
+      if (stdoutBuffer.trim()) {
+        logFfmpegLine(stdoutBuffer.trim(), "stdout");
+      }
+
       // Notify WebSocket that recording stopped
       wsManager.stopRecording(recordingId);
+
+      const elapsedSeconds = Math.round((Date.now() - ffmpegStartedAt) / 1000);
+      ffmpegLogger.info(
+        `${recordingContext} FFmpeg closed code=${code} signal=${signal ?? "none"} elapsed=${elapsedSeconds}s${
+          lastProgressLine ? ` lastProgress="${lastProgressLine}"` : ""
+        }`,
+      );
 
       // Recording was not successful
       if (code !== 0) {
@@ -147,6 +302,7 @@ export function recordStream(streamObject) {
     ffmpeg.on("error", (err) => {
       clearTimeout(timeout);
       logger.error(`Failed to start FFmpeg: ${err.message}`);
+      ffmpegLogger.error(`${recordingContext} Failed to start FFmpeg: ${err.message}`, err);
       reject(err);
     });
   });

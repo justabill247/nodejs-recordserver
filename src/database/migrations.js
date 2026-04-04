@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS schedules (
   stream_id INTEGER,
   source_url TEXT,
   cron TEXT,
+  one_shot INTEGER NOT NULL DEFAULT 0,
   duration INTEGER,
   FOREIGN KEY(stream_id) REFERENCES streams(id)
 );
@@ -42,6 +43,12 @@ CREATE INDEX IF NOT EXISTS idx_recordings_schedule_id ON recordings(schedule_id)
 CREATE INDEX IF NOT EXISTS idx_schedules_name ON schedules(name ASC);
         `
   );
+
+  const scheduleColumns = db.prepare("PRAGMA table_info(schedules)").all();
+  const hasOneShotColumn = scheduleColumns.some((column) => column.name === "one_shot");
+  if (!hasOneShotColumn) {
+    db.exec("ALTER TABLE schedules ADD COLUMN one_shot INTEGER NOT NULL DEFAULT 0;");
+  }
 
   db.pragma("foreign_keys = ON");
   logger.info("Tables have been migrated")

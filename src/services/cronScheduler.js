@@ -3,10 +3,12 @@ import { recordStream } from "./recorder.js";
 import {
   addSchedule,
   getAllSchedules,
+  getAllSchedulesWithStreamInfo,
   deleteSchedule,
   deleteAllSchedules,
 } from "../database/dbSchedule.js";
 import { createLogger } from "./logger.js";
+import { wsManager } from "./wsManager.js";
 const logger = createLogger("Scheduler");
 
 const scheduledJobs = new Map(); // name -> job instance
@@ -25,11 +27,20 @@ export function scheduleRecordings() {
         name: s.name,
         id: s.stream_id,
         schedule_id: s.id,
+        oneShot: Boolean(s.one_shot),
       },
+      false,
       false
     ); // don't re-save to DB on reload
   }
   logger.info(`Loaded ${schedules.length} saved jobs from DB`);
+}
+
+export function getScheduleStateSnapshot() {
+  return {
+    activeJobs: listJobs(),
+    schedules: getAllSchedulesWithStreamInfo(),
+  };
 }
 
 // Helper to get all scheduled job names
@@ -46,7 +57,7 @@ export function getScheduledJobNames() {
  * @param {object} options - Recording options (url, id, duration, name, schedule_id)
  * @param {boolean} saveToDb - Whether to insert this schedule into the DB
  */
-export function scheduleJob(name, cronExpr, options, saveToDb = true) {
+export function scheduleJob(name, cronExpr, options, saveToDb = true, broadcast = true) {
   // if job exists, stop it, delete it, will be overwritten
   if (scheduledJobs.has(name)) {
     scheduledJobs.get(name).stop();
@@ -61,6 +72,7 @@ export function scheduleJob(name, cronExpr, options, saveToDb = true) {
       source_url: options.url,
       stream_id: options.id,
       cron: cronExpr,
+      one_shot: options.oneShot,
       duration: options.duration,
     });
     // add schedule id to options
@@ -68,11 +80,19 @@ export function scheduleJob(name, cronExpr, options, saveToDb = true) {
     options.schedule_id = scheduleId;
   }
 
-  const task = cron.schedule(cronExpr, () => {
+  const task = cron.schedule(cronExpr, async () => {
     logger.info(`Attempting to record ${name}`);
-    recordStream(options)
-      .then((file) => logger.info(`Successfully recorded ${name} to ${file}`))
-      .catch((err) => logger.error(`Failed to record ${name}: ${err.message}`));
+    try {
+      const file = await recordStream(options);
+      logger.info(`Successfully recorded ${name} to ${file}`);
+    } catch (err) {
+      logger.error(`Failed to record ${name}: ${err.message}`);
+    } finally {
+      if (options.oneShot && options.schedule_id) {
+        logger.info(`One-shot schedule ${name} completed its first run and will be removed.`);
+        cancelJob(options.schedule_id, false);
+      }
+    }
   });
 
   // Store the task with its name
@@ -83,7 +103,11 @@ export function scheduleJob(name, cronExpr, options, saveToDb = true) {
     scheduledJobIds.set(String(options.schedule_id), name);
   }
   
-  logger.info(`Scheduled job ${name} with cron ${cronExpr}`);
+  logger.info(`Scheduled job ${name} with cron ${cronExpr}${options.oneShot ? " (one-shot)" : ""}`);
+
+  if (broadcast) {
+    wsManager.broadcastScheduleState(getScheduleStateSnapshot());
+  }
 }
 
 export function listJobs() {
@@ -130,6 +154,7 @@ export function cancelJob(nameOrId, deleteRecordings = false) {
       try {
         deleteSchedule(idToDelete, deleteRecordings);
         logger.info(`Successfully deleted schedule ${idToDelete} from database`);
+        wsManager.broadcastScheduleState(getScheduleStateSnapshot());
         return true;
       } catch (err) {
         logger.error(`Error deleting schedule ${idToDelete} from database: ${err.message}`, err);
@@ -153,6 +178,7 @@ export function cancelAllJobs(deleteRecordings = false) {
   
   // Delete all schedules from database
   deleteAllSchedules(deleteRecordings);
+  wsManager.broadcastScheduleState(getScheduleStateSnapshot());
   
   logger.info("All scheduled jobs cancelled.");
 }

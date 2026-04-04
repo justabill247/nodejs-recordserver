@@ -57,7 +57,7 @@ router.get("/:id/details", (req, res) => {
 
 // --- Add a schedule ---
 router.post("/", (req, res) => {
-  const { name, cron, duration, streamId, url } = req.body;
+  const { name, cron, duration, streamId, url, oneShot = false } = req.body;
 
   if (!name || !cron || !duration) {
     return res.status(400).json({ error: "Missing required fields: name, cron, duration" });
@@ -71,6 +71,10 @@ router.post("/", (req, res) => {
   // Validate duration is a positive number
   if (typeof duration !== 'number' || duration <= 0) {
     return res.status(400).json({ error: "Duration must be a positive number" });
+  }
+
+  if (typeof oneShot !== "boolean") {
+    return res.status(400).json({ error: "oneShot must be a boolean" });
   }
 
   // Determine final stream details
@@ -97,6 +101,7 @@ router.post("/", (req, res) => {
       source_url: finalUrl,
       stream_id: finalStreamId,
       cron,
+      one_shot: oneShot,
       duration
     });
     logger.info(`Saved schedule '${name}' to id ${scheduleId}`);
@@ -107,13 +112,14 @@ router.post("/", (req, res) => {
       id: finalStreamId, 
       duration, 
       name, 
-      schedule_id: scheduleId
+      schedule_id: scheduleId,
+      oneShot,
     }, false);
 
-    logger.info(`Scheduled job '${name}' with cron: ${cron}`);
+    logger.info(`Scheduled job '${name}' with cron: ${cron}${oneShot ? ' (one-shot)' : ''}`);
     res.status(201).json({ 
       success: true, 
-      message: `Scheduled '${name}' for ${cron} (duration: ${duration}s)`,
+      message: `Scheduled '${name}' for ${cron} (duration: ${duration}s${oneShot ? ', one-shot' : ''})`,
       scheduleId 
     });
   } catch (err) {

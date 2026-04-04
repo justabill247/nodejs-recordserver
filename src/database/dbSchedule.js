@@ -7,16 +7,17 @@ export function addSchedule({
   stream_id = null,
   source_url,
   cron,
+  one_shot = false,
   duration,
 }) {
   const stmt = db.prepare(
     `
-    INSERT OR REPLACE INTO schedules (name, stream_id, source_url, cron, duration)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO schedules (name, stream_id, source_url, cron, one_shot, duration)
+    VALUES (?, ?, ?, ?, ?, ?)
   `
   );
 
-  const result = stmt.run(name, stream_id, source_url, cron, duration);
+  const result = stmt.run(name, stream_id, source_url, cron, one_shot ? 1 : 0, duration);
   logger.info(`Added schedule ${name} with id ${result.lastInsertRowid}`)
   return result.lastInsertRowid
 }
@@ -96,6 +97,7 @@ export function getAllSchedulesWithStreamInfo() {
       id: row.id,
       name: row.name,
       cron: row.cron,
+      oneShot: Boolean(row.one_shot),
       duration: row.duration,
       source_url: row.source_url,
       stream: row.stream_id
@@ -130,6 +132,7 @@ export function getScheduleDetails(id) {
       id: schedule.id,
       name: schedule.name,
       cron: schedule.cron,
+      oneShot: Boolean(schedule.one_shot),
       duration: schedule.duration,
 
       stream: schedule.stream_id ? {

@@ -8,12 +8,14 @@ class WebSocketManager {
     this.wss = null;
     this.clients = new Set();
     this.activeRecordings = new Map(); // recordingId -> { name, startTime, duration, streamName }
+    this.getScheduleState = null;
   }
 
   /**
    * Initialize WebSocket server with existing HTTP server
    */
-  initialize(server) {
+  initialize(server, options = {}) {
+    this.getScheduleState = options.getScheduleState || null;
     this.wss = new WebSocketServer({ server, path: "/ws" });
 
     this.wss.on("connection", (ws) => {
@@ -79,14 +81,34 @@ class WebSocketManager {
       }))
     };
 
-    const message = JSON.stringify(status);
     logger.info(`[broadcastStatus] Broadcasting to ${this.clients.size} clients: ${this.activeRecordings.size} active recordings`);
+
+    this.broadcastMessage(status);
+  }
+
+  broadcastScheduleState(scheduleState = this.getScheduleState?.()) {
+    if (!scheduleState) {
+      return;
+    }
+
+    const status = {
+      type: "schedule-state",
+      ...scheduleState,
+    };
+
+    logger.info(`[broadcastScheduleState] Broadcasting to ${this.clients.size} clients: ${scheduleState.schedules?.length || 0} schedules`);
+
+    this.broadcastMessage(status);
+  }
+
+  broadcastMessage(payload) {
+    const message = JSON.stringify(payload);
 
     this.clients.forEach((client) => {
       if (client.readyState === 1) { // OPEN
         client.send(message, (err) => {
           if (err) {
-            logger.error(`[broadcastStatus] Send error: ${err.message}`);
+            logger.error(`[broadcastMessage] Send error: ${err.message}`);
           }
         });
       }
@@ -97,7 +119,7 @@ class WebSocketManager {
    * Send current state to a specific client
    */
   sendStateToClient(ws) {
-    const status = {
+    const recordingStatus = {
       type: "recording-status",
       activeCount: this.activeRecordings.size,
       recordings: Array.from(this.activeRecordings.entries()).map(([id, data]) => ({
@@ -106,9 +128,20 @@ class WebSocketManager {
       }))
     };
 
-    ws.send(JSON.stringify(status), (err) => {
+    ws.send(JSON.stringify(recordingStatus), (err) => {
       if (err) {
         logger.error("Failed to send initial state:", err.message);
+      }
+    });
+
+    const scheduleState = this.getScheduleState?.();
+    if (!scheduleState) {
+      return;
+    }
+
+    ws.send(JSON.stringify({ type: "schedule-state", ...scheduleState }), (err) => {
+      if (err) {
+        logger.error("Failed to send initial schedule state:", err.message);
       }
     });
   }
