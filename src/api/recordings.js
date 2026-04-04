@@ -42,6 +42,9 @@ router.get("/", (req, res) => {
  *             required:
  *               - duration
  *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Custom recording name
  *               streamId:
  *                 type: integer
  *                 description: Stream ID to record from
@@ -61,7 +64,11 @@ router.get("/", (req, res) => {
  */
 router.post("/record-now", async (req, res) => {
   try {
-    const { streamId, url, duration } = req.body;
+    const { name, streamId, url, duration } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: "Name is required" });
+    }
 
     if (!duration || duration <= 0) {
       return res.status(400).json({ error: "Duration must be a positive number" });
@@ -93,7 +100,7 @@ router.post("/record-now", async (req, res) => {
       id: finalStreamId,
       stream_name: streamName,
       duration,
-      name: `One-time Recording ${new Date().toLocaleString()}`,
+      name: String(name).trim(),
       schedule_id: null // No schedule for one-time recordings
     });
 
