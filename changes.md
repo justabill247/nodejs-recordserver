@@ -1,4 +1,33 @@
-# Recent Backend Changes (April 4-5, 2026)
+# Release: 0.2.0-beta (April 5, 2026)
+
+## Release Notes
+
+### New Features
+- **Frontend Integration**: Backend now serves built Vue frontend from `/public` directory on port 4000
+- **One-shot Recording Scheduling**: Manual scheduled recordings with custom naming support
+- **Environment Variable Configuration**: All directory paths (recordings, logs, database, logos, frontend) configurable via env vars
+- **SPA Routing**: Vue Router client-side navigation fully supported with fallback to index.html
+- **WebSocket State Broadcasting**: Real-time schedule state updates over WebSocket
+
+### Infrastructure
+- **Container Ready**: Full support for Linux LXC Proxmox deployment with Tailscale
+- **Logging Improvements**: Reduced FFmpeg noise with throttled progress updates and process lifecycle events
+- **Auto-create Directories**: All required directories auto-create at startup
+
+### Breaking Changes
+None - fully backward compatible with development setups
+
+### Known Limitations
+- Beta: Monitor for edge cases in production deployment
+- Record-now validation requires name parameter in API payload
+
+### Testing
+✅ One-shot scheduling with recorded artifacts  
+✅ WebSocket real-time state updates  
+✅ Frontend served and routing functional  
+✅ Custom recording names persisted to database  
+
+---
 
 ## Commit History
 
