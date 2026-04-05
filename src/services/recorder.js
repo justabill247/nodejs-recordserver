@@ -114,8 +114,8 @@ export function recordStream(streamObject) {
       return reject(err);
     }
 
-    // Ensure recordings folder exists
-    const recordingsDir = path.join(__dirname, "..", "..", "recordings");
+    // Ensure recordings folder exists (support env var for containers)
+    const recordingsDir = process.env.RECORDINGS_DIR || path.join(__dirname, "..", "..", "recordings");
     if (!fs.existsSync(recordingsDir)) {
       fs.mkdirSync(recordingsDir, { recursive: true });
     }

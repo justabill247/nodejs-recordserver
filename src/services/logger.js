@@ -10,8 +10,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.join(__dirname, "..","..");
 
-// --- Logs folder at project root ---
-const logDir = path.join(projectRoot, "logs");
+// --- Logs folder at project root (support env var for containers) ---
+const logDir = process.env.LOGS_DIR || path.join(projectRoot, "logs");
 if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 
 const loggerLevel = process.env.LOG_LEVEL || "info";
